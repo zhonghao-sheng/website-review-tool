@@ -1,10 +1,10 @@
 from django.shortcuts import render, redirect
 from django.http import HttpRequest
-# from login.models import User
+from login.models import User
 from django.http import JsonResponse
-from .forms import SignUpForm
+from .forms import SignUpForm, ResetPasswordForm
 from django.contrib.auth import authenticate, login, logout
-from django.contrib.auth.forms import UserCreationForm, AuthenticationForm
+from django.contrib.auth.forms import AuthenticationForm
 from django.contrib import messages
 
 from django.template.loader import render_to_string
@@ -12,9 +12,10 @@ from django.contrib.sites.shortcuts import get_current_site
 from django.utils.http import urlsafe_base64_encode, urlsafe_base64_decode
 from django.utils.encoding import force_bytes, force_str
 from django.core.mail import EmailMessage
-from .tokens import account_activation_token
+from .tokens import account_activation_token, reset_password_token
 from django.contrib.auth import get_user_model
 from django.utils.safestring import mark_safe
+
 def login_user(request):
     if request.method == 'POST':
         form = AuthenticationForm(data=request.POST)
@@ -22,23 +23,26 @@ def login_user(request):
             user = form.get_user()
             login(request, user)
             messages.success(request, 'You are now logged in.')
-            return redirect('index')  # Redirect to a suitable page after login
+            return redirect('search')  # Redirect to a suitable page after login
         else:
             messages.error(request, 'Invalid username or password.')
     else:
         form = AuthenticationForm()
     return render(request, 'login.html', {'form': form})
 
-
 def logout_user(request):
     logout(request)
     messages.success(request, 'You have been logged out.')
     return redirect('index')  # Redirect to a suitable page after logout
 
+def check_login(request):
+    if request.user.is_authenticated:
+        return redirect('search_link')  # Redirect to the search page if logged in
+    else:
+        return redirect('login')  # Redirect to the login page if not logged in
 
 def index(request):
     return render(request, 'index.html')
-
 
 def activate(request, uidb64, token):
     model = get_user_model()
@@ -55,14 +59,8 @@ def activate(request, uidb64, token):
         return redirect('login')
     else:
         messages.error(request, f"Link is invalid!")
-
-    messages.success(request, f"This function works!")
+    
     return redirect('index')
-
-
-def forgot_password(request):
-    return render(request, "forgotPassword.html")
-
 
 def activate_email(request, user, email):
     subject = "Activate your account."
@@ -79,7 +77,6 @@ def activate_email(request, user, email):
                          your email {email} inbox and click on the activation link to confirm registration.")
     else:
         messages.error(request, f"Problem sending email to {email}. Please ensure you have typed it correctly.")
-#
 
 def signup(request):
     if request.method == 'POST':
@@ -96,9 +93,54 @@ def signup(request):
         form = SignUpForm()
     return render(request, 'signup.html', {'form': form})
 
-
-def check_login(request):
-    if request.user.is_authenticated:
-        return redirect('search_link')  # Redirect to the search page if logged in
+def forgot_password(request):
+    if request.method == 'POST':
+        form = ResetPasswordForm(request.POST)
+        if form.is_valid():
+            username = form.cleaned_data.get('username')
+            email = form.cleaned_data.get('email')
+            query = User.objects.filter(username, email)
+            if query.exists():
+                user = query.first()
+                reset_password_email(request, user, email)
+                return redirect('login')
+            else:
+                messages.error(request, f"No account found with the provided username and password.")
+        else:
+            messages.error(request, f"Username or password were invalid.")
     else:
-        return redirect('login')  # Redirect to the login page if not logged in
+        form = ResetPasswordForm()
+    return render(request, 'forgot_password.html', {'form': form})
+
+def reset_password_email(request, user, email):
+    subject = "Reset your password."
+    message = render_to_string("reset_password.html", {
+        'user': user.username,
+        'domain': get_current_site(request).domain,
+        'uid': urlsafe_base64_encode(force_bytes(user.pk)),
+        'token': reset_password_token.make_token(user),
+        'protocol': 'https' if request.is_secure() else 'http'
+    })
+    email_message = EmailMessage(subject, message, to=[email])
+    if email_message.send():
+        messages.success(request, f"An email has been sent to {email}. Please check your inbox or spam.")
+    else:
+        messages.error(request, f"Problem sending email to {email}. Please ensure you have typed it correctly.")
+
+def reset_password(request, uidb64, token):
+    model = get_user_model()
+    try:
+        uid = force_str(urlsafe_base64_decode(uidb64))
+        user = model.objects.get(pk=uid)
+    except:
+        user = None
+
+    if user is not None and reset_password_token.check_token(user, token):
+        user.is_active = True
+        user.save()
+        messages.success(request, f"Email has been confirmed. Now you can log into your account.")
+        return redirect('login')
+    else:
+        messages.error(request, f"Link is invalid!")
+    
+    return redirect('index')

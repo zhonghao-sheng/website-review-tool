@@ -3,7 +3,6 @@ from search_link import views
 
 urlpatterns = [
     path('', views.search_link, name='search_link'),  # Search page
-    path('download/', views.download, name='download')
     # path('results/<uuid:job_id>/', views.results, name='results'),
     # path('user_left/', views.user_left, name='user_left'),
     # path('stop-job/<str:job_id>/', views.stop_job, name='stop_job'),

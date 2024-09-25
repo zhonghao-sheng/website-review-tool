@@ -28,16 +28,12 @@
     </style>
 </head>
 <body>
-    {% load static %}
     <h1>Search Results</h1>
     {% if status %} <!-- Display the info if 'status' is not empty -->
         <tr>
             <td colspan="3">{{ status }}</td> <!-- Display a message if an error occurs -->
         </tr>
     {% endif %}
-    <a href = "{% url 'download' %}?filename=output.xlsx">click here to download the result</a><br>
-    <a href = "{% url 'download' %}?filename=uom_sign_links.xlsx">click here to download the uom signs required links</a>
-
     <table>
         <thead>
             <tr>
@@ -77,6 +73,5 @@
             {% endif %}
         </tbody>
     </table>
-
 </body>
 </html>
